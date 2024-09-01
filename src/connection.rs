@@ -53,7 +53,7 @@ impl HttpConnection {
     pub fn send_response(&mut self, response: HttpResponse) -> Result<(), std::io::Error> {
         self.socket
             .get_mut()
-            .write_all(response.serialize().as_bytes())?;
+            .write_all(response.serialize().as_slice())?;
         self.socket.get_mut().flush()
     }
 }
