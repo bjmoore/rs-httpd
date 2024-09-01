@@ -1,6 +1,5 @@
 use std::{
-    collections::HashMap,
-    io::{BufRead, BufReader, Error, ErrorKind, Write},
+    io::{BufRead, BufReader, Error, ErrorKind, Read, Write},
     net::TcpStream,
 };
 
@@ -23,11 +22,7 @@ impl HttpConnection {
     pub fn get_next_request(&mut self) -> Result<HttpRequest, std::io::Error> {
         let next_line = read_to_crlf(&mut self.socket)?;
         let (method, target) = parse_request_line(&next_line)?;
-        let mut request = HttpRequest {
-            method,
-            target: String::from(target),
-            headers: HashMap::new(),
-        };
+        let mut request = HttpRequest::from_request_line(method, target);
 
         // parse headers
         loop {
@@ -43,9 +38,8 @@ impl HttpConnection {
                     "Malformed request headers",
                 )),
             }?;
-            request
-                .headers
-                .insert(name.trim().to_string(), value.trim().to_string());
+
+            request.add_header(name, value);
 
             // if the request has been going on too long, time out
             // -> actual connection timeout should not be handled here, but
@@ -68,7 +62,7 @@ fn read_to_crlf(socket: &mut BufReader<TcpStream>) -> Result<String, std::io::Er
     let mut internal_read_buf = String::new();
 
     loop {
-        socket.read_line(&mut internal_read_buf)?;
+        socket.take(4096).read_line(&mut internal_read_buf)?;
 
         if internal_read_buf.ends_with("\r\n") {
             break;
@@ -93,7 +87,7 @@ fn parse_request_line(line: &str) -> Result<(HttpMethod, &str), std::io::Error> 
         "HTTP/1.1" => Ok(()),
         _ => Err(Error::new(
             ErrorKind::Unsupported,
-            "Unsupported or HTTP version",
+            "Unsupported HTTP version",
         )),
     }?;
 

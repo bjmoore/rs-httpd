@@ -18,6 +18,7 @@ impl fmt::Display for HttpStatus {
 pub struct HttpResponse {
     pub response_code: HttpStatus,
     headers: HashMap<String, String>,
+    body: Option<Vec<u8>>,
 }
 
 impl HttpResponse {
@@ -25,23 +26,24 @@ impl HttpResponse {
         Self {
             response_code: status,
             headers: HashMap::new(),
+            body: None,
         }
     }
 
     pub fn serialize(&self) -> String {
-        let mut end_value = String::new();
-        end_value += "HTTP/1.1 ";
-        end_value += self.response_code.to_string().as_str();
-        end_value += "\r\n";
+        let mut out_buf = String::new();
+        out_buf += "HTTP/1.1 ";
+        out_buf += self.response_code.to_string().as_str();
+        out_buf += "\r\n";
         for (name, value) in self.headers.iter() {
-            end_value += name;
-            end_value += ": ";
-            end_value += value;
-            end_value += "\r\n";
+            out_buf += name;
+            out_buf += ": ";
+            out_buf += value;
+            out_buf += "\r\n";
         }
-        end_value += "\r\n";
+        out_buf += "\r\n";
 
-        end_value
+        out_buf
     }
 
     pub fn add_header(&mut self, key: &str, value: &str) {

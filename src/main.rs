@@ -1,6 +1,10 @@
-use std::net::{TcpListener, TcpStream};
+use std::{
+    io::{Error, ErrorKind},
+    net::{TcpListener, TcpStream},
+};
 
 use connection::HttpConnection;
+use request::HttpRequest;
 use response::{HttpResponse, HttpStatus};
 
 mod connection;
@@ -10,16 +14,35 @@ mod response;
 const LOCAL_SOCK: &'static str = "127.0.0.1:8001";
 
 fn handle_client(stream: TcpStream) -> std::io::Result<()> {
-    // 1. build a wrapper HttpConn struct that owns the TcpStream
-    // 2. conn.get_next_request() -> HttpRequest|Error
-    // 3.  ... much logic ...
-    // 4. conn.send_reply(reply: HttpResponse) -> Ok|Error
     let mut conn = HttpConnection::new(stream);
     let request = conn.get_next_request()?;
-    println!("{:?}", request);
+    let response = handle_request(request)?;
+    conn.send_response(response);
+    Ok(())
+}
+
+fn handle_request(request: HttpRequest) -> Result<HttpResponse, std::io::Error> {
     let mut response = HttpResponse::with_status(HttpStatus::OK);
     response.add_header("Content-Length", "0");
-    conn.send_response(response);
+
+    validate_request(&request);
+
+    // are we trying to get a file?
+    // are we allowed to get the file?
+    // calculate content-length and put the file into response body
+
+    Ok(response)
+}
+
+fn validate_request(request: &HttpRequest) -> Result<(), std::io::Error> {
+    match request.read_header("Host") {
+        Some(_) => Ok(()),
+        None => Err(Error::new(
+            ErrorKind::InvalidInput,
+            "Missing required Host header",
+        )),
+    }?;
+
     Ok(())
 }
 
