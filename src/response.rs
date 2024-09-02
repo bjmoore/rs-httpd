@@ -3,13 +3,21 @@ use std::fmt;
 
 #[derive(Debug, PartialEq)]
 pub enum HttpStatus {
-    OK,
+    Ok,
+    BadRequest,
+    Forbidden,
+    NotFound,
+    InternalServerError,
 }
 
 impl fmt::Display for HttpStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            HttpStatus::OK => write!(f, "200 OK"),
+            HttpStatus::Ok => write!(f, "200 OK"),
+            HttpStatus::BadRequest => write!(f, "400 Bad Request"),
+            HttpStatus::Forbidden => write!(f, "403 Forbidden"),
+            HttpStatus::NotFound => write!(f, "404 Not Found"),
+            HttpStatus::InternalServerError => write!(f, "500 Internal Server Error"),
         }
     }
 }

@@ -38,7 +38,7 @@ fn handle_client(stream: TcpStream) -> std::io::Result<()> {
 }
 
 fn generate_response(request: HttpRequest) -> Result<HttpResponse, std::io::Error> {
-    let mut response = HttpResponse::with_status(HttpStatus::OK);
+    let mut response = HttpResponse::with_status(HttpStatus::Ok);
     response.add_header("Content-Length", "0");
 
     validate_request(&request)?;
@@ -49,10 +49,18 @@ fn generate_response(request: HttpRequest) -> Result<HttpResponse, std::io::Erro
 
     // add a lot of error handling here
     println!("trying to read: {}", path.display());
-    let file_contents = std::fs::read(path)?;
-    let body_size = file_contents.len();
-    response.add_header("Content-Length", body_size.to_string().as_str());
-    response.put_body(file_contents);
+    let file_contents = std::fs::read(path);
+    match &file_contents {
+        Err(e) => match e.kind() {
+            ErrorKind::NotFound => response.response_code = HttpStatus::NotFound,
+            _ => response.response_code = HttpStatus::InternalServerError,
+        },
+        Ok(contents) => {
+            let body_size = contents.len();
+            response.add_header("Content-Length", body_size.to_string().as_str());
+            response.put_body(contents.to_vec());
+        }
+    };
 
     Ok(response)
 }
