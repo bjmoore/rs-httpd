@@ -1,39 +1,42 @@
 use std::io::{Error, ErrorKind};
 use std::path::Path;
-use std::{
-    net::{TcpListener, TcpStream},
-    path::PathBuf,
-};
+use std::path::PathBuf;
+use tokio::net::{TcpListener, TcpStream};
 
 use crate::response::HttpStatus;
 use crate::{connection::HttpConnection, request::HttpRequest, response::HttpResponse};
 
 pub struct HttpServer {
-    listener: TcpListener,
+    address: String,
 }
 
 impl HttpServer {
-    pub fn new(addr: &str) -> std::io::Result<Self> {
+    pub fn new(address: &str) -> std::io::Result<Self> {
         Ok(Self {
-            listener: TcpListener::bind(addr)?,
+            address: String::from(address),
         })
     }
 
-    pub fn run(&self) -> std::io::Result<()> {
+    pub async fn run(&self) -> std::io::Result<()> {
+        let listener = TcpListener::bind(&self.address).await?;
         loop {
-            for stream in self.listener.incoming() {
-                // these should be spun off into a thread ig
-                handle_client(stream?)?;
-            }
+            let (connection, addr) = listener.accept().await?;
+            tokio::spawn(handle_client(connection));
         }
     }
 }
 
-fn handle_client(stream: TcpStream) -> std::io::Result<()> {
+async fn handle_client(stream: TcpStream) -> std::io::Result<()> {
     let mut conn = HttpConnection::new(stream);
-    let request = conn.get_next_request()?;
+    // In H2 this will be getting the next frame and routing it to a new greenthread
+    let request = conn.get_next_request().await?;
+    // In H2/3 I think we need:
+    // reader task peels the next frame out of the socket
+    // writer task gets an mpsc receiver
+    // for a new stream, spawn a new task and put it into a map
+    // each stream task has a cloned mpsc sender to send frames to the writer task
     let response = generate_response(request)?;
-    conn.send_response(response)?;
+    conn.send_response(response).await?;
     Ok(())
 }
 
@@ -58,6 +61,7 @@ fn generate_response(request: HttpRequest) -> Result<HttpResponse, std::io::Erro
         Ok(contents) => {
             let body_size = contents.len();
             response.add_header("Content-Length", body_size.to_string().as_str());
+            response.add_header("Connection", "close");
             response.put_body(contents.to_vec());
         }
     };

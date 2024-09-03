@@ -1,7 +1,6 @@
-use std::{
-    io::{BufRead, BufReader, Error, ErrorKind, Read, Write},
-    net::TcpStream,
-};
+use std::io::{Error, ErrorKind};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::net::TcpStream;
 
 use crate::{
     request::{HttpMethod, HttpRequest},
@@ -19,14 +18,14 @@ impl HttpConnection {
         }
     }
 
-    pub fn get_next_request(&mut self) -> Result<HttpRequest, std::io::Error> {
-        let next_line = read_to_crlf(&mut self.socket)?;
+    pub async fn get_next_request(&mut self) -> Result<HttpRequest, std::io::Error> {
+        let next_line = read_to_crlf(&mut self.socket).await?;
         let (method, target) = parse_request_line(&next_line)?;
         let mut request = HttpRequest::from_request_line(method, target);
 
         // parse headers
         loop {
-            let next_line = read_to_crlf(&mut self.socket)?;
+            let next_line = read_to_crlf(&mut self.socket).await?;
             if next_line == "\r\n" {
                 break;
             }
@@ -50,19 +49,20 @@ impl HttpConnection {
         Ok(request)
     }
 
-    pub fn send_response(&mut self, response: HttpResponse) -> Result<(), std::io::Error> {
+    pub async fn send_response(&mut self, response: HttpResponse) -> Result<(), std::io::Error> {
         self.socket
             .get_mut()
-            .write_all(response.serialize().as_slice())?;
-        self.socket.get_mut().flush()
+            .write_all(&response.serialize().as_slice())
+            .await?;
+        self.socket.flush().await
     }
 }
 
-fn read_to_crlf(socket: &mut BufReader<TcpStream>) -> Result<String, std::io::Error> {
+async fn read_to_crlf(socket: &mut BufReader<TcpStream>) -> Result<String, std::io::Error> {
     let mut internal_read_buf = String::new();
 
     loop {
-        socket.take(4096).read_line(&mut internal_read_buf)?;
+        socket.read_line(&mut internal_read_buf).await?;
 
         if internal_read_buf.ends_with("\r\n") {
             break;
